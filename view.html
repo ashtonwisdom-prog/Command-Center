@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Command Center — Quick View</title>
+<style>
+  :root{
+    --graphite:#1E2325; --graphite-2:#272D30; --graphite-3:#31383B;
+    --line:#3B4448; --paper:#F0EFEC; --ink:#1E2325;
+    --steel:#8A959A; --soul:#C41230; --soul-deep:#8E0D22; --go:#2E8B5E;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--graphite);color:var(--paper);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  header{position:sticky;top:0;z-index:5;background:var(--graphite);
+    border-bottom:3px solid var(--soul);padding:14px 16px 12px;
+    display:flex;align-items:center;justify-content:space-between;}
+  header h1{font-size:1.05rem;margin:0;letter-spacing:.02em;font-weight:700}
+  header h1 small{display:block;font-weight:400;color:var(--steel);font-size:.68rem;margin-top:2px}
+  .gear{background:none;border:1px solid var(--line);color:var(--paper);
+    width:36px;height:36px;border-radius:8px;font-size:1rem;cursor:pointer}
+  main{padding:14px 14px 40px;max-width:480px;margin:0 auto}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:.66rem;
+    color:var(--steel);margin-bottom:14px}
+  .pill i{width:7px;height:7px;border-radius:50%;background:var(--go)}
+  .pill.busy i{background:#E0A94B}
+  .pill.err i{background:var(--soul)}
+  .card{background:var(--graphite-2);border:1px solid var(--line);
+    border-radius:10px;padding:16px;margin-bottom:12px}
+  .card h2{margin:0 0 10px;font-size:.72rem;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--steel);font-weight:600}
+  .stat-row{display:flex;justify-content:space-between;align-items:baseline;
+    padding:8px 0;border-top:1px solid var(--line)}
+  .stat-row:first-of-type{border-top:none}
+  .stat-row .label{font-size:.82rem;color:var(--paper)}
+  .stat-row .val{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat-row .sub{color:var(--steel);font-size:.72rem;margin-left:6px;font-weight:400}
+  .big{display:flex;gap:10px}
+  .big .box{flex:1;background:var(--graphite-3);border-radius:8px;
+    padding:12px;text-align:center}
+  .big .box .n{font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .big .box .l{font-size:.64rem;color:var(--steel);text-transform:uppercase;
+    letter-spacing:.06em;margin-top:2px}
+  .rule{height:3px;background:var(--soul);border-radius:2px;margin:2px 0 12px;width:46px}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .top .name{font-weight:700;font-size:.95rem}
+  .top .n{font-size:1.3rem;font-weight:800;color:var(--soul)}
+  .empty{color:var(--steel);font-size:.82rem;text-align:center;padding:30px 10px}
+  .refresh{width:100%;padding:12px;border-radius:8px;border:1px solid var(--line);
+    background:var(--graphite-3);color:var(--paper);font-size:.85rem;font-weight:600;
+    margin-top:4px}
+  .refresh:active{background:var(--soul)}
+  /* settings sheet */
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:20}
+  .sheet-backdrop.show{display:block}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--graphite-2);
+    border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 18px 28px;
+    transform:translateY(100%);transition:transform .2s ease;z-index:21}
+  .sheet.show{transform:translateY(0)}
+  .sheet h3{margin:0 0 12px;font-size:.95rem}
+  .sheet label{display:block;font-size:.7rem;color:var(--steel);margin:10px 0 4px;
+    text-transform:uppercase;letter-spacing:.06em}
+  .sheet input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);
+    background:var(--graphite-3);color:var(--paper);font-size:.85rem}
+  .sheet .row{display:flex;gap:10px;margin-top:16px}
+  .sheet button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--line);
+    background:var(--graphite-3);color:var(--paper);font-size:.85rem;font-weight:600}
+  .sheet button.primary{background:var(--soul);border-color:var(--soul)}
+  .hint{font-size:.68rem;color:var(--steel);margin-top:10px;line-height:1.4}
+
+  /* schedule */
+  .daytabs{display:flex;gap:4px;margin-bottom:12px;touch-action:pan-y}
+  .daytabs button{flex:1;padding:8px 0;border-radius:7px;border:1px solid var(--line);
+    background:var(--graphite-3);color:var(--steel);font-size:.68rem;font-weight:700;
+    letter-spacing:.02em}
+  .daytabs button.active{background:var(--soul);border-color:var(--soul);color:#fff}
+  .swipearea{touch-action:pan-y}
+  .sched-group{margin-bottom:4px}
+  .sched-group h3{margin:12px 0 6px;font-size:.62rem;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--steel);font-weight:700}
+  .sched-group h3:first-child{margin-top:0}
+  .sched-row{display:flex;justify-content:space-between;align-items:center;
+    padding:9px 0;border-top:1px solid var(--line)}
+  .sched-group h3 + .sched-row{border-top:none}
+  .sched-row .who{font-size:.86rem;font-weight:600}
+  .sched-row .desk{color:var(--steel);font-size:.66rem;font-weight:400;margin-left:6px}
+  .status{font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:20px;
+    white-space:nowrap;margin-left:10px}
+  .status.open{background:rgba(46,139,94,.18);color:var(--go)}
+  .status.close{background:rgba(196,18,48,.18);color:#E4657A}
+  .status.bells{background:rgba(224,169,75,.18);color:#E0A94B}
+  .status.off{background:var(--graphite-3);color:var(--steel)}
+  .status.blank{background:var(--graphite-3);color:var(--steel)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Command Center<small>Quick View · read-only</small></h1>
+  <button class="gear" id="gearBtn">⚙</button>
+</header>
+
+<main>
+  <div class="pill" id="pill"><i></i><span>Not connected yet</span></div>
+  <div id="scheduleCard"></div>
+  <div id="content"></div>
+  <button class="refresh" id="refreshBtn">Pull latest</button>
+</main>
+
+<div class="sheet-backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet">
+  <h3>Connect to the shared log</h3>
+  <label>Shared link (same one used in the desktop app)</label>
+  <input id="urlInput" placeholder="https://script.google.com/macros/s/…/exec" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label>Token (leave blank if none was set)</label>
+  <input id="tokenInput" placeholder="Optional" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="hint">This is view-only — it pulls the same numbers everyone else syncs to, but never writes anything back.</div>
+  <div class="row">
+    <button id="cancelBtn">Cancel</button>
+    <button class="primary" id="saveBtn">Save & pull</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var LS_URL = "cc_quickview_url", LS_TOKEN = "cc_quickview_token";
+  var DEFAULT_URL = "https://script.google.com/macros/s/AKfycbxvBjWj16wE0JCwCwAOqi8-H6753oWo0yGEKeJ7Xfvcyn12jk1v19PhdNOAIJdgN4CA/exec";
+  var pillEl = document.getElementById("pill");
+  var contentEl = document.getElementById("content");
+  var scheduleEl = document.getElementById("scheduleCard");
+  var sheet = document.getElementById("sheet"), backdrop = document.getElementById("backdrop");
+
+  var DAYS = [["MON","Mon"],["TUE","Tue"],["WED","Wed"],["THU","Thu"],["FRI","Fri"],["SAT","Sat"]];
+  var todayCode = ["SUN","MON","TUE","WED","THU","FRI","SAT"][new Date().getDay()];
+  var activeDay = DAYS.some(function(d){ return d[0]===todayCode; }) ? todayCode : "MON";
+  var lastMgrs = [], lastFins = [], lastSched = {};
+
+  function n(v){ if(v==="" || v==null) return null; var x=parseFloat(String(v).replace(/[$,%\s]/g,"")); return isFinite(x)?x:null; }
+  function money(v){ v = n(v)||0; var s = v<0 ? "-" : ""; return s + "$" + Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0}); }
+  function units(v){ v = v||0; return (Math.round(v*10)/10).toLocaleString(); }
+  function dealGross(d){ return (n(d.front)||0) + (n(d.back)||0); }
+  function credits(d){
+    var a=String(d.s1||"").trim(), b=String(d.s2||"").trim();
+    if (a && b && a!==b) { var o={}; o[a]=0.5; o[b]=0.5; return o; }
+    if (a) { var p={}; p[a]=1; return p; }
+    if (b) { var q={}; q[b]=1; return q; }
+    return {};
+  }
+
+  function cfg(){
+    var url = localStorage.getItem(LS_URL);
+    if (url === null){ url = DEFAULT_URL; localStorage.setItem(LS_URL, url); }
+    return { url: url, token: localStorage.getItem(LS_TOKEN) || "" };
+  }
+  function setPill(state, msg){
+    pillEl.className = "pill" + (state ? " "+state : "");
+    pillEl.querySelector("span").textContent = msg;
+  }
+
+  function openSheet(){
+    document.getElementById("urlInput").value = cfg().url;
+    document.getElementById("tokenInput").value = cfg().token;
+    sheet.classList.add("show"); backdrop.classList.add("show");
+  }
+  function closeSheet(){ sheet.classList.remove("show"); backdrop.classList.remove("show"); }
+
+  document.getElementById("gearBtn").onclick = openSheet;
+  document.getElementById("cancelBtn").onclick = closeSheet;
+  backdrop.onclick = closeSheet;
+  document.getElementById("saveBtn").onclick = function(){
+    localStorage.setItem(LS_URL, document.getElementById("urlInput").value.trim());
+    localStorage.setItem(LS_TOKEN, document.getElementById("tokenInput").value.trim());
+    closeSheet();
+    pull();
+  };
+  document.getElementById("refreshBtn").onclick = pull;
+
+  function render(deals){
+    var today = new Date();
+    var pad = function(x){ return x<10 ? "0"+x : ""+x; };
+    var todayISO = today.getFullYear()+"-"+pad(today.getMonth()+1)+"-"+pad(today.getDate());
+    var ym = todayISO.slice(0,7);
+
+    var live = deals.filter(function(d){ return d && !d._del && d.date; });
+    var mtd = live.filter(function(d){ return d.date.slice(0,7) === ym; });
+    var day = live.filter(function(d){ return d.date === todayISO; });
+
+    function summarize(list){
+      var out = { units:0, newU:0, usedU:0, gross:0, bySales:{} };
+      list.forEach(function(d){
+        var g = dealGross(d), isNew = d.kind === "New";
+        out.gross += g;
+        var cr = credits(d);
+        Object.keys(cr).forEach(function(name){
+          out.units += cr[name];
+          if (isNew) out.newU += cr[name]; else out.usedU += cr[name];
+          out.bySales[name] = (out.bySales[name]||0) + cr[name];
+        });
+      });
+      return out;
+    }
+
+    var mtdS = summarize(mtd), dayS = summarize(day);
+    var leaderboard = Object.keys(mtdS.bySales)
+      .map(function(name){ return { name: name, units: mtdS.bySales[name] }; })
+      .sort(function(a,b){ return b.units - a.units; });
+
+    var html = "";
+    html += '<div class="card"><h2>Today</h2><div class="rule"></div>'
+      + '<div class="big">'
+        + '<div class="box"><div class="n">'+units(dayS.units)+'</div><div class="l">Units</div></div>'
+        + '<div class="box"><div class="n">'+money(dayS.gross)+'</div><div class="l">Gross</div></div>'
+      + '</div></div>';
+
+    html += '<div class="card"><h2>Month to date</h2><div class="rule"></div>'
+      + '<div class="stat-row"><span class="label">Total units</span><span class="val">'+units(mtdS.units)+'</span></div>'
+      + '<div class="stat-row"><span class="label">New</span><span class="val">'+units(mtdS.newU)+'</span></div>'
+      + '<div class="stat-row"><span class="label">Used</span><span class="val">'+units(mtdS.usedU)+'</span></div>'
+      + '<div class="stat-row"><span class="label">Total gross</span><span class="val">'+money(mtdS.gross)+'</span></div>'
+      + '</div>';
+
+    html += '<div class="card"><h2>Salespeople — Month to date</h2><div class="rule"></div>'
+      + (leaderboard.length
+          ? leaderboard.map(function(p, i){
+              return '<div class="stat-row"><span class="label">'+(i+1)+'. '+esc(p.name)+'</span><span class="val">'+units(p.units)+'</span></div>';
+            }).join("")
+          : '<div class="empty">No deals logged yet this month.</div>')
+      + '</div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(m){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]; }); }
+
+  var STATUS_LABEL = {open:"Opens", close:"Closes", bells:"Bells", off:"Off"};
+
+  function statusChip(assign, raw, dayCode){
+    var st = (assign || {})[dayCode] || "";
+    var text = (raw || {})[dayCode] || STATUS_LABEL[st] || "";
+    if (!st && !text) return '<span class="status blank">—</span>';
+    var cls = st || "blank";
+    return '<span class="status '+cls+'">'+esc(text || STATUS_LABEL[st] || st)+'</span>';
+  }
+
+  function scheduleRow(item, dayCode, showDesk){
+    var desk = showDesk && item.desk ? '<span class="desk">'+esc(item.desk)+'</span>' : "";
+    return '<div class="sched-row"><span class="who">'+esc(item.name)+desk+'</span>'
+      + statusChip(item.assign, item.raw, dayCode) + '</div>';
+  }
+
+  function salesFloorRow(name, status){
+    var cls = status || "blank";
+    var text = STATUS_LABEL[status] || "—";
+    return '<div class="sched-row"><span class="who">'+esc(name)+'</span>'
+      + '<span class="status '+cls+'">'+esc(text)+'</span></div>';
+  }
+
+  function renderSchedule(mgrs, fins, schedByDay){
+    lastMgrs = mgrs; lastFins = fins; lastSched = schedByDay || lastSched;
+
+    var tabs = DAYS.map(function(d){
+      return '<button data-day="'+d[0]+'" class="'+(d[0]===activeDay?"active":"")+'">'+d[1]+'</button>';
+    }).join("");
+
+    var floorAssign = (lastSched[activeDay] && lastSched[activeDay].assign) || {};
+    var floorNames = Object.keys(floorAssign).sort();
+
+    var body = "";
+    if (!mgrs.length && !fins.length && !floorNames.length){
+      body = '<div class="empty">No schedule found in the shared log yet.</div>';
+    } else {
+      body += '<div class="sched-group"><h3>Managers</h3>'
+        + (mgrs.length ? mgrs.map(function(m){ return scheduleRow(m, activeDay, true); }).join("")
+                       : '<div class="empty">No managers on file.</div>')
+        + '</div>';
+      body += '<div class="sched-group"><h3>Finance</h3>'
+        + (fins.length ? fins.map(function(f){ return scheduleRow(f, activeDay, false); }).join("")
+                       : '<div class="empty">No finance schedule on file.</div>')
+        + '</div>';
+      body += '<div class="sched-group"><h3>Sales Floor</h3>'
+        + (floorNames.length
+            ? floorNames.map(function(nm){ return salesFloorRow(nm, floorAssign[nm]); }).join("")
+            : '<div class="empty">No sales floor schedule on file.</div>')
+        + '</div>';
+    }
+
+    scheduleEl.innerHTML = '<div class="card"><h2>Schedule</h2><div class="rule"></div>'
+      + '<div class="daytabs">'+tabs+'</div>'
+      + '<div class="swipearea" id="schedBody">'+body+'</div>'
+      + '</div>';
+
+    var tabEls = scheduleEl.querySelectorAll(".daytabs button");
+    for (var i=0;i<tabEls.length;i++){
+      tabEls[i].onclick = function(){
+        activeDay = this.getAttribute("data-day");
+        renderSchedule(lastMgrs, lastFins, lastSched);
+      };
+    }
+
+    var swipeEl = document.getElementById("schedBody");
+    var touchX = null, touchY = null;
+    swipeEl.addEventListener("touchstart", function(e){ touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, {passive:true});
+    swipeEl.addEventListener("touchend", function(e){
+      if (touchX==null) return;
+      var dx = e.changedTouches[0].clientX - touchX;
+      var dy = e.changedTouches[0].clientY - touchY;
+      touchX = null; touchY = null;
+      if (Math.abs(dx) < 50) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      var idx = DAYS.findIndex(function(d){ return d[0]===activeDay; });
+      if (dx < 0 && idx < DAYS.length-1) idx++;
+      else if (dx > 0 && idx > 0) idx--;
+      else return;
+      activeDay = DAYS[idx][0];
+      renderSchedule(lastMgrs, lastFins, lastSched);
+    }, {passive:true});
+  }
+
+  function pull(){
+    var c = cfg();
+    if (!c.url){
+      setPill("", "Tap the gear to connect");
+      scheduleEl.innerHTML = "";
+      contentEl.innerHTML = '<div class="card"><div class="empty">Not connected yet. Tap the gear icon above and paste the same shared link used on the desktop Command Center.</div></div>';
+      return;
+    }
+    setPill("busy", "Pulling…");
+    var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var t = ctl ? setTimeout(function(){ ctl.abort(); }, 30000) : null;
+    fetch(c.url, {
+      method: "POST",
+      headers: {"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({ token: c.token || "", who: "Quick View (phone)", since: "", quiet: false, records: [] }),
+      signal: ctl ? ctl.signal : undefined
+    }).then(function(r){ if(t) clearTimeout(t); return r.json(); })
+      .then(function(res){
+        if (!res) throw new Error("no response");
+        if (res.error) {
+          setPill("err", res.error);
+          var tokenDebug = "Sending token (" + c.token.length + " chars): " + JSON.stringify(c.token);
+          contentEl.innerHTML = '<div class="card"><div class="empty">'+esc(res.error)+'</div><div class="empty" style="font-size:.62rem;word-break:break-all;">'+esc(tokenDebug)+'</div></div>';
+          return;
+        }
+        var recs = res.records || [];
+        var deals = recs.filter(function(r){ return r.t === "deal"; }).map(function(r){ return r.d; });
+        var mgrs = recs.filter(function(r){ return r.t === "mgr"; }).map(function(r){ return r.d; })
+          .filter(function(m){ return m && m.name && !m._del; });
+        var fins = recs.filter(function(r){ return r.t === "fin"; }).map(function(r){ return r.d; })
+          .filter(function(f){ return f && f.name && !f._del; });
+        var schedByDay = {};
+        recs.filter(function(r){ return r.t === "sched"; }).forEach(function(r){
+          if (r.d && r.d.day) schedByDay[r.d.day] = r.d;
+        });
+        render(deals);
+        renderSchedule(mgrs, fins, schedByDay);
+        var when = new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+        setPill("", "Synced " + when);
+      })
+      .catch(function(err){
+        if(t) clearTimeout(t);
+        setPill("err", "Could not reach the sheet");
+        contentEl.innerHTML = '<div class="card"><div class="empty">Could not reach the shared log. Check the link in settings, or try again in a moment.</div></div>';
+      });
+  }
+
+  pull();
+})();
+</script>
+</body>
+</html>
