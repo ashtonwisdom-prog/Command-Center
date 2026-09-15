@@ -168,6 +168,8 @@ tfoot td.l{text-align:left;letter-spacing:.1em;text-transform:uppercase;font-siz
 .tag.n{border-color:#2A5C8A;color:#2A5C8A} .tag.u{border-color:#7A5A22;color:#7A5A22}
 .tag.house{border-color:var(--soul);color:var(--soul)}
 .tag.ok{border-color:var(--go);color:var(--go)} .tag.open{border-color:var(--soul);color:var(--soul)}
+.tag.warn{border-color:var(--hold);color:var(--hold)}
+.dim{color:var(--steel)}
 .unitcell{display:flex;align-items:center;justify-content:flex-end;gap:9px}
 .unitbar{height:7px;background:var(--ink);opacity:.8;flex:0 0 auto}
 .unitcell .v{font:600 .92rem/1 "IBM Plex Mono",monospace;min-width:40px;text-align:right}
@@ -1295,7 +1297,7 @@ function deskTag(name, muted){
   return '<span class="tag '+(d==="House"?"house":d==="New"?"n":"u")+'">'+esc(d)+'</span>';
 }
 function migrate(){
-  ST.deals = ST.deals || []; ST.owes = ST.owes || []; ST.roster = ST.roster || [];
+  ST.deals = ST.deals || []; ST.owes = ST.owes || []; ST.roster = ST.roster || []; ST.recon = ST.recon || [];
   ST.aging = ST.aging || []; ST.vendors = ST.vendors || []; ST.months = ST.months || [];
   if (!ST.schedule || !ST.schedule.length) ST.schedule = seedSchedule();
   if (!ST.schedPeople || !ST.schedPeople.length) ST.schedPeople = seedSchedPeople(ST.schedule, ST.roster);
@@ -1322,6 +1324,7 @@ function migrate(){
   if (!ST.finPvr) ST.finPvr = seedFinPvr();
   ST.deals.forEach(function(d){ if(!d.id) d.id=uid(); if(!d._u) d._u=SEED_TS; });
   ST.owes.forEach(function(x){ if(!x.id) x.id=uid(); if(!x._u) x._u=SEED_TS; });
+  ST.recon.forEach(function(x){ if(!x.id) x.id=uid(); if(!x._u) x._u=SEED_TS; });
   ST.roster.forEach(function(x){ if(!x.id) x.id=uid(); if(!x._u) x._u=SEED_TS; });
   ST.aging.forEach(function(bl){ (bl.rows||[]).forEach(function(r){ if(!r.id) r.id=uid(); if(!r._u) r._u=SEED_TS; }); });
   ST.months.forEach(function(m){ if(!m._u) m._u=SEED_TS; });
@@ -1565,6 +1568,7 @@ var Sync = {
     }
     ST.deals.forEach(function(d){ add("deal:"+d.id, "deal", d); });
     ST.owes.forEach(function(x){ add("owe:"+x.id, "owe", x); });
+    ST.recon.forEach(function(x){ add("recon:"+x.id, "recon", x); });
     ST.roster.forEach(function(x){ add("spec:"+x.id, "spec", x); });
     (ST.months||[]).forEach(function(m){ add("month:"+m.id, "month", m); });
     (ST.schedule||[]).forEach(function(x){ add("sched:"+x.id, "sched", x); });
@@ -1598,6 +1602,7 @@ var Sync = {
       }
       if (r.t==="deal") into(ST.deals);
       else if (r.t==="owe") into(ST.owes);
+      else if (r.t==="recon") into(ST.recon);
       else if (r.t==="spec") into(ST.roster);
       else if (r.t==="month"){ ST.months = ST.months || []; into(ST.months); }
       else if (r.t==="sched") into(ST.schedule);
@@ -1885,6 +1890,9 @@ function openForm(cfg){
                 '<option value="yes"'+(v?" selected":"")+'>Yes</option></select>';
       } else if (x.type==="calc"){
         input = '<div class="calc" id="'+id+'">—</div>';
+      } else if (x.type==="textarea"){
+        input = '<textarea id="'+id+'" data-k="'+x.k+'" rows="'+(x.rows||3)+'"'+
+          (x.ph?' placeholder="'+esc(x.ph)+'"':'')+'>'+esc(v==null?"":v)+'</textarea>';
       } else {
         input = '<input id="'+id+'" data-k="'+x.k+'" type="'+(x.type||"text")+'"'+
           (x.type==="number"?' step="0.01"':'')+
@@ -2608,8 +2616,205 @@ function vOwes(){
 }
 
 /* ============================================================
-   12. VIEW: SETUP
+   11b. VIEW: RECON (service + wholesale)
    ============================================================ */
+var RECON_STATUSES = ["Not Started","RO Generated Awaiting Approval","RO Approved","RO Work-In-Process","RO Complete"];
+var RECON_TYPES = ["CHOICE","UVI","CPO","WHOLESALE","Other"];
+
+function reconDays(x){
+  if (!x.dateIn) return null;
+  var d = new Date(x.dateIn+"T00:00:00");
+  if (isNaN(d)) return null;
+  return Math.max(0, Math.floor((Date.now()-d.getTime())/86400000));
+}
+function reconAgeTag(days){
+  if (days==null) return '<span class="tag">—</span>';
+  var cls = days>=30 ? "open" : days>=14 ? "warn" : "ok";
+  return '<span class="tag '+cls+'">'+days+'d</span>';
+}
+function reconStatusTag(status){
+  var cls = status==="RO Complete" ? "ok" : status==="Not Started" ? "open" : "warn";
+  return '<span class="tag '+cls+'">'+esc(status||"—")+'</span>';
+}
+
+function reconForm(existing, bucket){
+  var isNew=!existing;
+  var val = existing ? Object.assign({},existing) : {
+    id:uid(), bucket: bucket||"service", stock:"", year:"", make:"", model:"", color:"",
+    svcType: bucket==="wholesale"?"WHOLESALE":"CHOICE", secondKey:false,
+    dateIn: new Date().toISOString().slice(0,10), ro:"", tech:"", status:"Not Started",
+    listPrice:null, shopCost:null, vendorCost:null, notes:""
+  };
+  openForm({
+    title: isNew?"Add "+(val.bucket==="wholesale"?"wholesale":"recon")+" vehicle":"Edit "+(existing.stock||"vehicle"),
+    saveLabel: isNew?"Add vehicle":"Save changes",
+    value: val,
+    fields:[
+      {k:"stock",label:"Stock #"},
+      {k:"year",label:"Year"},
+      {k:"make",label:"Make"},
+      {k:"model",label:"Model"},
+      {k:"color",label:"Color"},
+      {k:"svcType",label:"Type",type:"select",opts:RECON_TYPES},
+      {k:"secondKey",label:"2nd key on hand",type:"check"},
+      {k:"dateIn",label:"Date in",type:"date"},
+      {k:"ro",label:"RO #"},
+      {k:"tech",label:"Tech"},
+      {k:"status",label:"Status",type:"select",opts:RECON_STATUSES,wide:true},
+      {k:"listPrice",label:"List price",type:"number"},
+      {k:"shopCost",label:"Shop cost",type:"number"},
+      {k:"vendorCost",label:"Vendor cost",type:"number"},
+      {k:"notes",label:"Notes",type:"textarea",rows:5,wide:true}
+    ],
+    validate:function(o){ return String(o.stock).trim()?null:"Give a stock #."; },
+    onSave:function(o){
+      o.listPrice=n(o.listPrice); o.shopCost=n(o.shopCost); o.vendorCost=n(o.vendorCost);
+      stamp(o);
+      if (isNew) ST.recon.push(o);
+      else { var i=ST.recon.findIndex(function(x){return x.id===o.id;}); if(i>=0) ST.recon[i]=o; }
+    },
+    onDelete: isNew?null:function(){ existing._del=true; stamp(existing); },
+    deleteMsg:"Remove this vehicle from the list?"
+  });
+}
+
+/* Bulk paste-import: tab-separated rows copied straight out of Excel, in this
+   exact column order — Stock, Year, Make, Model, Color, Type, 2nd Key(Y/N),
+   Date In, RO #, Tech, Status, Notes. Nothing is guessed beyond that; anything
+   that doesn't parse is left blank and editable afterward. */
+function parseReconDate(s){
+  s = String(s||"").trim();
+  if (!s) return "";
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1]+"-"+m[2]+"-"+m[3];
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m){
+    var yy = m[3].length===2 ? "20"+m[3] : m[3];
+    return yy+"-"+(m[1].length<2?"0"+m[1]:m[1])+"-"+(m[2].length<2?"0"+m[2]:m[2]);
+  }
+  return "";
+}
+function reconImportOpen(bucket){
+  box.innerHTML = '<h3>Import '+(bucket==="wholesale"?"wholesale":"recon")+' rows from Excel</h3>'+
+    '<p class="sub">In Excel, select and copy these columns in this order — Stock, Year, Make, Model, '+
+    'Color, Type, 2nd Key (Y/N), Date In, RO #, Tech, Status, Notes — then paste below. One vehicle per line.</p>'+
+    '<div class="form"><div class="field wide"><label for="riText">Pasted rows</label>'+
+    '<textarea id="riText" rows="10" placeholder="Paste tab-separated rows here…"></textarea></div></div>'+
+    '<div class="boxfoot"><span class="err-msg" id="riErr"></span>'+
+    '<span class="right"><button class="btn" id="riCancel">Cancel</button>'+
+    '<button class="btn primary" id="riGo">Import</button></span></div>';
+  modal.classList.add("on");
+  box.querySelector("#riCancel").addEventListener("click", closeModal);
+  box.querySelector("#riGo").addEventListener("click", function(){
+    var raw = box.querySelector("#riText").value;
+    var lines = raw.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
+    if (!lines.length){ box.querySelector("#riErr").textContent = "Paste at least one row."; return; }
+    pushUndo();
+    var added = 0;
+    lines.forEach(function(line){
+      var c = line.split("\t");
+      if (!c[0] || !String(c[0]).trim()) return;
+      var o = {
+        id:uid(), bucket: bucket,
+        stock: String(c[0]||"").trim(), year: String(c[1]||"").trim(), make: String(c[2]||"").trim(),
+        model: String(c[3]||"").trim(), color: String(c[4]||"").trim(),
+        svcType: String(c[5]||"").trim().toUpperCase() || (bucket==="wholesale"?"WHOLESALE":"CHOICE"),
+        secondKey: String(c[6]||"").trim().toUpperCase()==="Y",
+        dateIn: parseReconDate(c[7]), ro: String(c[8]||"").trim(), tech: String(c[9]||"").trim(),
+        status: RECON_STATUSES.indexOf(String(c[10]||"").trim())>=0 ? String(c[10]).trim() : "Not Started",
+        listPrice:null, shopCost:null, vendorCost:null,
+        notes: String(c[11]||"").trim()
+      };
+      stamp(o); ST.recon.push(o); added++;
+    });
+    closeModal(); touch();
+  });
+  var first = box.querySelector("textarea"); if(first) first.focus();
+}
+
+function reconSection(root, bucket, label){
+  var idp = bucket;
+  function rows(){
+    var q = root.querySelector("#"+idp+"q").value.trim().toUpperCase();
+    var st = root.querySelector("#"+idp+"tbl").getAttribute("data-st")||"all";
+    return live(ST.recon).filter(function(x){
+      if (x.bucket!==bucket) return false;
+      if (st!=="all" && x.status!==st) return false;
+      if (q && (x.stock+" "+x.make+" "+x.model+" "+x.tech+" "+x.ro).toUpperCase().indexOf(q)<0) return false;
+      return true;
+    });
+  }
+  function draw(){
+    var list = rows();
+    var tb = root.querySelector("#"+idp+"tbl tbody");
+    root.querySelector("#"+idp+"c").textContent = list.length+" vehicles";
+    tb.innerHTML = list.map(function(x){
+      var days = reconDays(x);
+      return '<tr><td class="l mono">'+esc(x.stock)+'</td>'+
+        '<td class="l">'+esc(x.year)+' '+esc(x.make)+' '+esc(x.model)+(x.color?' <span class="dim">'+esc(x.color)+'</span>':'')+'</td>'+
+        '<td class="l">'+esc(x.svcType||"—")+'</td>'+
+        '<td class="l">'+esc(x.tech||"—")+'</td>'+
+        '<td class="l">'+reconStatusTag(x.status)+'</td>'+
+        '<td>'+reconAgeTag(days)+'</td>'+
+        '<td class="acts"><button class="btn sm" data-e="'+esc(x.id)+'">Edit</button></td></tr>';
+    }).join("") || '<tr><td colspan="7" class="l dim">Nothing here yet.</td></tr>';
+    tb.querySelectorAll("[data-e]").forEach(function(btn){
+      btn.addEventListener("click",function(){
+        var id=btn.getAttribute("data-e");
+        reconForm(live(ST.recon).filter(function(x){return x.id===id;})[0], bucket);
+      });
+    });
+  }
+  root.querySelector("#"+idp+"Add").addEventListener("click",function(){ reconForm(null, bucket); });
+  root.querySelector("#"+idp+"Imp").addEventListener("click",function(){ reconImportOpen(bucket); });
+  root.querySelectorAll("#"+idp+"seg button").forEach(function(b){
+    b.addEventListener("click",function(){
+      root.querySelectorAll("#"+idp+"seg button").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false");});
+      root.querySelector("#"+idp+"tbl").setAttribute("data-st", b.getAttribute("data-v"));
+      draw();
+    });
+  });
+  root.querySelector("#"+idp+"q").addEventListener("input",draw);
+  draw();
+}
+
+function vRecon(){
+  var items = live(ST.recon);
+  var service = items.filter(function(x){return x.bucket==="service";});
+  var wholesale = items.filter(function(x){return x.bucket==="wholesale";});
+  var aging = items.filter(function(x){ var d=reconDays(x); return d!=null && d>=30; }).length;
+
+  function section(bucket, label, list){
+    var statusChips = '<button data-v="all" aria-pressed="true">All</button>'+
+      RECON_STATUSES.map(function(s){ return '<button data-v="'+esc(s)+'" aria-pressed="false">'+esc(s)+'</button>'; }).join("");
+    return '<h2 class="sec">'+esc(label)+'</h2><div class="panel">'+
+      '<div class="ph"><div></div><div><button class="btn" id="'+bucket+'Imp">Import from Excel</button> '+
+        '<button class="btn primary" id="'+bucket+'Add">+ Add vehicle</button></div></div>'+
+      '<div class="ctl"><div class="seg" id="'+bucket+'seg" role="group" aria-label="Status">'+statusChips+'</div>'+
+        '<input class="search" id="'+bucket+'q" type="search" placeholder="Search stock, tech, RO…">'+
+        '<span class="count" id="'+bucket+'c"></span></div>'+
+      '<div class="tablewrap tall"><table id="'+bucket+'tbl"><thead><tr>'+
+        '<th class="l">Stock</th><th class="l">Vehicle</th><th class="l">Type</th><th class="l">Tech</th>'+
+        '<th class="l">Status</th><th>Days</th><th></th></tr></thead><tbody></tbody></table></div></div>';
+  }
+
+  return { html: head("Recon","& Wholesale.","Every used vehicle currently in service, and everything headed to wholesale.",["Live"])+
+    sessionBanner()+
+    '<div class="strip">'+
+      '<div class="tile"><div class="eyebrow">In recon</div><div class="k num">'+service.length+'</div>'+
+        '<dl><dt>Wholesale</dt><dd>'+wholesale.length+'</dd></dl></div>'+
+      '<div class="tile"><div class="eyebrow">30+ days</div><div class="k num'+(aging?' neg':'')+'">'+aging+'</div>'+
+        '<dl><dt>Across both lists</dt><dd>Worth a look</dd></dl></div>'+
+    '</div>'+
+    section("service","Service", service)+
+    section("wholesale","Wholesale", wholesale),
+    init:function(root){
+      reconSection(root, "service", "Service");
+      reconSection(root, "wholesale", "Wholesale");
+    }};
+}
+
+
 function lastSaved(){
   if (!ST.savedAt) return "Not yet";
   var d=new Date(ST.savedAt);
@@ -5960,6 +6165,7 @@ var VIEWS=[
   {g:"Floor",     id:"people",  label:"Team", fn:vPeople, live:true},
   {g:"Inventory", id:"cpo",     label:"CPO inventory", fn:vCpo,     live:true},
   {g:"Inventory", id:"aging",   label:"Used aging",    fn:vAging,   live:true},
+  {g:"Inventory", id:"recon",   label:"Recon & wholesale", fn:vRecon, live:true},
   {g:"Inventory", id:"lots",    label:"New car lots",  fn:vLots, live:true},
   {g:"Inventory", id:"weowes",  label:"We-owes & POs", fn:vOwes,    live:true},
   {g:"Setup",     id:"setup",   label:"Month & goals", fn:vSetup,   live:true},
@@ -5981,6 +6187,7 @@ function counts(){
     people: String(live(ST.timeOff||[]).length),
     cpo: String(live(ST.cpo||[]).length),
     aging: String(ST.aging.reduce(function(a,b){return a+agingRows(b).length;},0)),
+    recon: String(live(ST.recon||[]).filter(function(x){ var d=reconDays(x); return d!=null && d>=30; }).length || ""),
     lots: String(live(ST.units||[]).length),
     weowes: String(ACT().owes.length),
     setup: "",
