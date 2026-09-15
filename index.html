@@ -2732,6 +2732,85 @@ function reconImportOpen(bucket){
   var first = box.querySelector("textarea"); if(first) first.focus();
 }
 
+/* Make Ready Tracking Form — matches Roger Beasley's own two-sided landscape
+   template. Only the fields the app actually tracks are pre-filled (vehicle
+   info, type, 2nd key, status); the vendor checklist and sign-off print blank
+   for the shop to complete by hand, same as the paper original. */
+var MAKE_READY_ITEMS = [
+  {item:"Quick Rinse", vendor:"Make Ready"},
+  {item:"Touch-Up", vendor:"Quality Auto"},
+  {item:"Recon Package", vendor:"Quality Auto"},
+  {item:"Body Repair", vendor:"Quality Auto"},
+  {item:"Buff / Polish \u2013 Single / Full", vendor:"Quality Auto"},
+  {item:"Headlight Restoration", vendor:"Quality Auto"},
+  {item:"GLASS \u2013 Front / Rear", vendor:"Quality Auto"},
+  {item:"PDR", vendor:"Texas Dent"},
+  {item:"Interior Repair", vendor:"Color New"},
+  {item:"Final Detail", vendor:"Make Ready"},
+  {item:"TINT \u2013 Front / Full", vendor:"SunTint"},
+  {item:"2nd Key", vendor:"Car Keys Express"},
+  {item:"Photos", vendor:"Make Ready"}
+];
+function makeReadyHTML(x){
+  var box = '<span style="display:inline-block;width:13px;height:13px;border:1.5px solid #333;vertical-align:-2px;margin-right:4px;"></span>';
+  function chk(label, on){
+    return '<span style="display:inline-block;margin-right:16px;white-space:nowrap;">'+
+      '<span style="display:inline-block;width:13px;height:13px;border:1.5px solid #333;vertical-align:-2px;margin-right:5px;'+
+      (on?'background:#333;':'')+'"></span>'+esc(label)+'</span>';
+  }
+  var vt = String(x.svcType||"").toUpperCase();
+  var rows = MAKE_READY_ITEMS.map(function(r){
+    return '<tr><td style="font-weight:600;">'+esc(r.item)+'</td><td>'+esc(r.vendor)+'</td>'+
+      '<td style="text-align:center;">'+box+'</td><td style="text-align:center;">'+box+'</td>'+
+      '<td style="text-align:center;">'+box+'</td><td style="text-align:center;">'+box+'</td>'+
+      '<td style="border-bottom:1px solid #999;">&nbsp;</td></tr>';
+  }).join("");
+  return '<!doctype html><html><head><meta charset="utf-8"><title>Make Ready \u2014 '+esc(x.stock)+'</title>'+
+    '<style>@page{size:landscape;margin:14mm;} body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:0;}'+
+    '.band{background:#1B3A63;color:#fff;font-weight:700;padding:6px 10px;font-size:13px;letter-spacing:.02em;margin-top:14px;}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px;} th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;}'+
+    'th{background:#DCE6F1;font-size:11px;} .hdr{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1B3A63;padding-bottom:8px;}'+
+    'h1{font-size:22px;margin:0;} h1 small{display:block;font-size:12px;font-weight:400;letter-spacing:.1em;color:#555;}'+
+    '.two{display:flex;gap:16px;margin-top:14px;} .two > div{flex:1;}'+
+    '.line{border-bottom:1px solid #999;height:20px;margin-bottom:6px;}</style></head><body onload="window.print()">'+
+    '<div class="hdr"><h1>USED VEHICLE<br>MAKE READY TRACKING FORM<small>Generated from the Command Center Recon tab</small></h1>'+
+    '<div style="text-align:right;font-size:12px;color:#555;letter-spacing:.15em;">INSPECT / RECONDITION / PREPARE</div></div>'+
+    '<div class="band">VEHICLE INFORMATION</div>'+
+    '<table><tr><th>Manager</th><th>Start Date</th><th>Stock #</th><th>VIN</th><th>Year / Make / Model</th><th>Color</th><th>Vehicle Type</th><th>2nd Key</th></tr>'+
+    '<tr><td>&nbsp;</td><td>'+esc(x.dateIn||"")+'</td><td>'+esc(x.stock||"")+'</td><td>&nbsp;</td>'+
+    '<td>'+esc(x.year||"")+' '+esc(x.make||"")+' '+esc(x.model||"")+'</td><td>'+esc(x.color||"")+'</td>'+
+    '<td>'+chk("UVI",vt==="UVI")+chk("CPO",vt==="CPO")+chk("Choice",vt==="CHOICE")+'</td>'+
+    '<td>'+chk("Yes",!!x.secondKey)+chk("No",!x.secondKey)+'</td></tr></table>'+
+    '<div class="band">VENDOR / MAKE READY TRACKING <span style="font-weight:400;">\u2014 mark each box when completed, enter dates and notes as needed</span></div>'+
+    '<table><tr><th>Item</th><th>Vendor</th><th>Needed</th><th>Sent</th><th>Complete</th><th>Returned</th><th>Notes / Repair Instructions</th></tr>'+rows+'</table>'+
+    '<div class="two"><div><div class="band">MAKE READY RETURN &amp; FINAL INSPECTION</div>'+
+    '<div style="border:1px solid #ccc;border-top:none;padding:10px;">'+
+    '<p><b>Date Make Ready Returned:</b> ______________________</p>'+
+    '<p><b>Final Inspection:</b></p>'+
+    '<p>'+chk("Repairs Complete")+chk("Detail Complete")+'</p>'+
+    '<p>'+chk("Glass Checked")+chk("Body Checked")+'</p>'+
+    '<p>'+chk("Interior Checked")+chk("PDR Checked")+'</p>'+
+    '<p>'+chk("Tint Checked")+chk("2nd Key Received")+'</p>'+
+    '<p>'+chk("Photos Complete")+chk("Ready for Sale")+'</p></div></div>'+
+    '<div><div class="band">MANAGER FINAL NOTES</div>'+
+    '<div style="border:1px solid #ccc;border-top:none;padding:10px;">'+
+    '<div class="line"></div><div class="line"></div><div class="line"></div><div class="line"></div></div>'+
+    '<div class="band">MANAGER APPROVAL</div>'+
+    '<div style="border:1px solid #ccc;border-top:none;padding:10px;">'+
+    '<p><b>Manager Approval Date</b><span style="margin-left:60px;"><b>Signature</b></span></p>'+
+    '<div class="line" style="width:45%;display:inline-block;"></div>'+
+    '<div class="line" style="width:45%;display:inline-block;margin-left:20px;"></div>'+
+    '<p>'+chk("NOT APPROVED \u2014 ADDITIONAL WORK NEEDED")+'</p><p>'+chk("APPROVED \u2014 READY FOR SALE")+'</p></div></div></div>'+
+    '</body></html>';
+}
+function printMakeReady(x){
+  var win = window.open("", "_blank");
+  if (!win){ window.alert("Your browser blocked the print window \u2014 allow pop-ups for this page and try again."); return; }
+  win.document.write(makeReadyHTML(x));
+  win.document.close();
+}
+
+
 function reconSection(root, bucket, label){
   var idp = bucket;
   function rows(){
@@ -2756,12 +2835,20 @@ function reconSection(root, bucket, label){
         '<td class="l">'+esc(x.tech||"—")+'</td>'+
         '<td class="l">'+reconStatusTag(x.status)+'</td>'+
         '<td>'+reconAgeTag(days)+'</td>'+
-        '<td class="acts"><button class="btn sm" data-e="'+esc(x.id)+'">Edit</button></td></tr>';
+        '<td class="acts"><button class="btn sm" data-e="'+esc(x.id)+'">Edit</button> '+
+          '<button class="btn sm" data-p="'+esc(x.id)+'">Print form</button></td></tr>';
     }).join("") || '<tr><td colspan="7" class="l dim">Nothing here yet.</td></tr>';
     tb.querySelectorAll("[data-e]").forEach(function(btn){
       btn.addEventListener("click",function(){
         var id=btn.getAttribute("data-e");
         reconForm(live(ST.recon).filter(function(x){return x.id===id;})[0], bucket);
+      });
+    });
+    tb.querySelectorAll("[data-p]").forEach(function(btn){
+      btn.addEventListener("click",function(){
+        var id=btn.getAttribute("data-p");
+        var v = live(ST.recon).filter(function(x){return x.id===id;})[0];
+        if (v) printMakeReady(v);
       });
     });
   }
